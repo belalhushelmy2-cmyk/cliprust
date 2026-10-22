@@ -16,6 +16,33 @@ use std::{
 };
 slint::include_modules!();
 
+fn apply_keymap(ui: &AppWindow, value: &str) -> Result<()> {
+    let bindings = crate::shortcuts::parse_keymap(value)?;
+    let mut labels = crate::shortcuts::defaults();
+    let overrides: std::collections::BTreeMap<String, String> = serde_json::from_str(value)?;
+    labels.extend(overrides);
+    ui.set_paste_hint(labels["paste"].clone().into());
+    ui.set_keep_open_hint(labels["keep-open"].clone().into());
+    ui.set_actions_hint(labels["actions"].clone().into());
+    ui.set_search_hint(labels["search-focus"].clone().into());
+    ui.on_resolve_shortcut(move |key, ctrl, alt, shift, meta| {
+        let pressed = crate::shortcuts::Shortcut {
+            key: key.to_ascii_lowercase(),
+            ctrl,
+            alt,
+            shift,
+            meta,
+        };
+        bindings
+            .iter()
+            .find(|(_, binding)| **binding == pressed)
+            .map(|(action, _)| action.as_str())
+            .unwrap_or("")
+            .into()
+    });
+    Ok(())
+}
+
 fn prepare_desktop_target(fallback: Target) -> Target {
     #[cfg(target_os = "linux")]
     if platform::sway::available() {
@@ -476,9 +503,32 @@ impl Worker {
                 if bindings.values().any(|binding| *binding == global_key) {
                     bail!("Global shortcut conflicts with an in-window action");
                 }
-                self.store.set_setting("global_shortcut", &global)?;
+                let previous = self
+                    .store
+                    .setting("global_shortcut")
+                    .unwrap_or_else(|| "Super+V".into());
+                // In-window bindings are live; they never need a process restart.
                 self.store.set_setting("keymap", &value)?;
-                self.status = "Shortcuts saved. Quit and reopen Cliprust to apply them.".into();
+                let applied = value.clone();
+                self.send(move |ui| {
+                    let _ = apply_keymap(&ui, &applied);
+                });
+                let launcher_changed = crate::shortcuts::Shortcut::global(&previous)? != global_key;
+                #[cfg(target_os = "linux")]
+                let launcher_changed = launcher_changed || platform::sway::available();
+                self.status = if launcher_changed {
+                    match platform::apply_launcher_shortcut(&global_key) {
+                        Ok(message) => {
+                            self.store.set_setting("global_shortcut", &global)?;
+                            message.into()
+                        }
+                        Err(error) => {
+                            format!("Paste shortcuts applied. Launcher unchanged: {error:#}")
+                        }
+                    }
+                } else {
+                    "Paste shortcuts applied immediately.".into()
+                };
             }
             Request::Group(mode) => {
                 if !matches!(
@@ -685,6 +735,23 @@ impl Worker {
                     ""
                 };
                 self.choose_file(action, save, name.into(), None);
+                return Ok(());
+            }
+            "configure-launcher" => {
+                #[cfg(target_os = "linux")]
+                {
+                    let shortcut = crate::shortcuts::Shortcut::global(
+                        &self
+                            .store
+                            .setting("global_shortcut")
+                            .unwrap_or_else(|| "Super+V".into()),
+                    )?;
+                    self.status = platform::apply_launcher_shortcut(&shortcut)?.into();
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    self.status = "Edit Open history above, save, then restart Cliprust.".into();
+                }
                 return Ok(());
             }
             "clear-searches" => {
@@ -1187,31 +1254,7 @@ pub fn run(
         crate::tray::set_paused(paused);
     }
     let capture_guard = capture_tx.clone();
-    let bindings =
-        crate::shortcuts::parse_keymap(&store.setting("keymap").unwrap_or_else(|| "{}".into()))?;
-    let mut labels = crate::shortcuts::defaults();
-    let overrides: std::collections::BTreeMap<String, String> =
-        serde_json::from_str(&store.setting("keymap").unwrap_or_else(|| "{}".into()))?;
-    labels.extend(overrides);
-    ui.set_paste_hint(labels["paste"].clone().into());
-    ui.set_keep_open_hint(labels["keep-open"].clone().into());
-    ui.set_actions_hint(labels["actions"].clone().into());
-    ui.set_search_hint(labels["search-focus"].clone().into());
-    ui.on_resolve_shortcut(move |key, ctrl, alt, shift, meta| {
-        let pressed = crate::shortcuts::Shortcut {
-            key: key.to_ascii_lowercase(),
-            ctrl,
-            alt,
-            shift,
-            meta,
-        };
-        bindings
-            .iter()
-            .find(|(_, binding)| **binding == pressed)
-            .map(|(action, _)| action.as_str())
-            .unwrap_or("")
-            .into()
-    });
+    apply_keymap(&ui, &store.setting("keymap").unwrap_or_else(|| "{}".into()))?;
     let shortcut = crate::shortcuts::Shortcut::global(
         &store
             .setting("global_shortcut")

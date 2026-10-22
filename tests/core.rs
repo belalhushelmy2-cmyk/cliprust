@@ -200,6 +200,14 @@ fn configurable_shortcuts_reject_collisions_and_preserve_typing() {
         Shortcut::global("Meta+V").unwrap(),
         Shortcut::global("Super+V").unwrap()
     );
+    assert_eq!(
+        Shortcut::global("Mod+V").unwrap(),
+        Shortcut::global("Super+V").unwrap()
+    );
+    assert_eq!(
+        Shortcut::parse("Control+Shift+Enter").unwrap(),
+        Shortcut::parse("Ctrl+Shift+Enter").unwrap()
+    );
     assert_eq!(map["keep-open"], Shortcut::parse("Ctrl+Enter").unwrap());
     assert!(Shortcut::global("Enter").is_err());
     for value in [

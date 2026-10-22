@@ -21,7 +21,7 @@ static STATE: Mutex<Option<ContextState>> = Mutex::new(None);
 pub fn available() -> bool {
     super::is_wayland() && std::env::var_os("SWAYSOCK").is_some()
 }
-fn ipc(kind: u32, payload: &str) -> Result<Value> {
+pub(super) fn ipc(kind: u32, payload: &str) -> Result<Value> {
     let socket = std::env::var_os("SWAYSOCK")
         .context("SWAYSOCK is missing; launch Cliprust from your Sway session")?;
     let mut stream = UnixStream::connect(socket).context("Connect to Sway IPC")?;
@@ -44,7 +44,7 @@ fn ipc(kind: u32, payload: &str) -> Result<Value> {
     stream.read_exact(&mut bytes)?;
     Ok(serde_json::from_slice(&bytes)?)
 }
-fn command(value: &str) -> Result<()> {
+pub(super) fn command(value: &str) -> Result<()> {
     let reply = ipc(0, value)?;
     let replies = reply.as_array().context("Invalid Sway command reply")?;
     if replies.is_empty() {

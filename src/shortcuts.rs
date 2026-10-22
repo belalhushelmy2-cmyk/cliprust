@@ -23,10 +23,10 @@ impl Shortcut {
             .map(|part| part.trim().to_ascii_lowercase())
         {
             let flag = match token.as_str() {
-                "ctrl" => Some(&mut shortcut.ctrl),
+                "ctrl" | "control" => Some(&mut shortcut.ctrl),
                 "alt" => Some(&mut shortcut.alt),
                 "shift" => Some(&mut shortcut.shift),
-                "super" | "meta" | "win" => Some(&mut shortcut.meta),
+                "super" | "meta" | "win" | "mod" | "mod4" => Some(&mut shortcut.meta),
                 _ => None,
             };
             if let Some(flag) = flag {

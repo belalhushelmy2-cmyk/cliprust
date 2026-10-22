@@ -21,6 +21,8 @@ pub mod sway;
 #[cfg(target_os = "linux")]
 mod sway_input;
 #[cfg(target_os = "linux")]
+mod sway_shortcuts;
+#[cfg(target_os = "linux")]
 mod wayland;
 #[cfg(target_os = "linux")]
 mod wayland_input;
@@ -68,6 +70,38 @@ pub fn is_wayland() -> bool {
     std::env::var_os("WAYLAND_DISPLAY").is_some()
         || std::env::var("XDG_SESSION_TYPE").is_ok_and(|s| s == "wayland")
 }
+/// Use the persistent package launcher rather than an extracted runtime path.
+pub fn launcher_path() -> Result<std::path::PathBuf> {
+    #[cfg(target_os = "linux")]
+    for name in ["CLIPRUST_LAUNCHER", "APPIMAGE"] {
+        if let Some(path) = std::env::var_os(name).map(std::path::PathBuf::from)
+            && path.is_absolute()
+            && path.is_file()
+        {
+            return Ok(path);
+        }
+    }
+    Ok(std::env::current_exe()?)
+}
+
+pub fn apply_launcher_shortcut(shortcut: &crate::shortcuts::Shortcut) -> Result<&'static str> {
+    #[cfg(target_os = "linux")]
+    {
+        if sway::available() {
+            sway_shortcuts::apply(shortcut, &launcher_path()?)?;
+            return Ok("All shortcuts applied. Sway configuration backed up and validated.");
+        }
+        if is_wayland() {
+            wayland_shortcuts::configure()?;
+            return Ok(
+                "Paste shortcuts applied. Choose the launcher shortcut in the desktop dialog.",
+            );
+        }
+    }
+    let _ = shortcut;
+    Ok("Paste shortcuts applied. Quit and reopen Cliprust to apply the launcher shortcut.")
+}
+
 pub fn autostart_enabled() -> Result<bool> {
     autostart::enabled()
 }
@@ -330,7 +364,24 @@ pub fn paste(target: Target) -> Result<()> {
 pub fn open_external(value: &str) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open").arg(value).spawn()?;
+        let mut command = std::process::Command::new("xdg-open");
+        // Private bundled libraries/configuration must not leak into other apps.
+        for name in [
+            "LD_LIBRARY_PATH",
+            "FONTCONFIG_PATH",
+            "FONTCONFIG_FILE",
+            "XKB_CONFIG_ROOT",
+            "XLOCALEDIR",
+        ] {
+            if let Some(original) = std::env::var_os(format!("CLIPRUST_SYSTEM_{name}")) {
+                if original.is_empty() {
+                    command.env_remove(name);
+                } else {
+                    command.env(name, original);
+                }
+            }
+        }
+        command.arg(value).spawn()?;
         Ok(())
     }
     #[cfg(windows)]
@@ -414,7 +465,7 @@ pub fn hotkey(
     #[cfg(target_os = "linux")]
     if sway::available() {
         let _ = tx.send(Event::Diagnostic(
-            "Sway shortcut: bind Meta+V to cliprust --toggle in your Sway configuration".into(),
+            "Sway launcher: edit Open history in Settings, then Save shortcuts.".into(),
         ));
         return Ok(());
     }

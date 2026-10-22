@@ -34,6 +34,7 @@ if compgen -G "$payload/*.dll" >/dev/null; then
     cat "$notice" >> "$payload/THIRD-PARTY-LICENSES.txt"
   done
 fi
+python3 scripts/check-windows-runtime.py "$payload" "$output/WINDOWS-IMPORTS.txt"
 makensis -DVERSION="$version" -DPAYLOAD="$payload" -DOUTPUT="$output/Cliprust-$version-windows-x86_64-Setup.exe" packaging/windows/installer.nsi
 python3 - "$payload" "$output/cliprust-$version-windows-x86_64-portable.zip" <<'PY'
 import pathlib,sys,zipfile
@@ -41,5 +42,4 @@ root=pathlib.Path(sys.argv[1])
 with zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED) as archive:
  for path in sorted(root.iterdir()):archive.write(path,root.name+'/'+path.name)
 PY
-x86_64-w64-mingw32-objdump -p "$binary" | sed -n 's/.*DLL Name: /Windows import: /p' > "$output/WINDOWS-IMPORTS.txt"
 echo "Windows packages: $output"

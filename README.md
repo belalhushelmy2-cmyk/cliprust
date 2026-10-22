@@ -77,7 +77,7 @@ See [TEST_RESULTS.md](TEST_RESULTS.md) for actual results, [PROGRESS.md](PROGRES
 
 ## Packaging
 
-Packaging recipes are in `packaging/`. The Arch PKGBUILD has been built and its package contents inspected on Garuda/Arch Linux. `scripts/deb.sh` builds a Debian archive with cargo-deb; its metadata and payload were inspected, but installation still needs validation on Debian/Ubuntu. See [TEST_RESULTS.md](TEST_RESULTS.md). The x86_64 AppImage was built and smoke-tested on the development host. Its script accepts trusted APPIMAGETOOL and optional APPIMAGE_RUNTIME paths; CI downloads pinned, SHA-verified versions. System libraries are not bundled, so build on the oldest supported distribution and validate compatibility before distribution. The NSIS recipe describes a per-user Windows EXE installer. These are not verified release installers until run on their target platforms. CI builds/tests Windows and Linux and assembles release artifacts on version tags.
+Packaging recipes are in `packaging/`. The Arch PKGBUILD has been built and its package contents inspected on Garuda/Arch Linux. `scripts/deb.sh` builds a Debian archive with cargo-deb; its metadata and payload were inspected, but installation still needs validation on Debian/Ubuntu. See [TEST_RESULTS.md](TEST_RESULTS.md). The x86_64 AppImage was built and smoke-tested on the development host. Its script accepts trusted APPIMAGETOOL and optional APPIMAGE_RUNTIME paths; CI downloads pinned, SHA-verified versions. Release packages share a private non-glibc runtime, fonts and keyboard data; build on the Ubuntu 22.04 baseline and validate compatibility before distribution. The NSIS recipe produces a per-user Windows EXE installer with a runtime-DLL audit. These are not verified release installers until run on their target platforms. CI builds/tests Windows and Linux and assembles release artifacts on version tags.
 
 GPL-3.0-only. Original identity and implementation; not affiliated with Raycast. Slint and other dependency licenses apply separately.
 
@@ -85,7 +85,7 @@ Recent searches remembers up to 20 queries when a result is copied/pasted or the
 
 ### Configurable shortcuts
 
-Settings configures the global launcher and the two independent paste actions. Quit and reopen Cliprust after saving. The portal may choose a different global trigger on Wayland. In-window action overrides are also available through the CLI:
+Settings configures the global launcher and the two independent paste actions. Paste bindings apply immediately. On Sway, saving updates the actual compositor binding after conflict checks, backup and validation. Other Wayland desktops control the launcher through their Global Shortcuts portal; use Desktop launcher shortcut to open its configuration UI where supported. Windows/X11 launcher changes currently require quitting and reopening Cliprust. In-window action overrides are also available through the CLI:
 
 ```sh
 cliprust config global_shortcut 'Ctrl+Alt+V'

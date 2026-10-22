@@ -92,6 +92,10 @@ enum Command {
         days: u32,
     },
     Doctor,
+    /// Apply a launcher binding using the desktop's supported shortcut mechanism.
+    SetupShortcut {
+        shortcut: String,
+    },
     /// Headless event-driven monitoring (Ctrl+C to stop).
     Monitor {
         #[arg(long, default_value_t = 0)]
@@ -162,6 +166,11 @@ fn execute() -> Result<()> {
     let now = chrono::Utc::now().timestamp();
     match cli.command.unwrap() {
         Command::ServeBundle => unreachable!(),
+        Command::SetupShortcut { shortcut } => {
+            let parsed = cliprust::shortcuts::Shortcut::global(&shortcut)?;
+            println!("{}", platform::apply_launcher_shortcut(&parsed)?);
+            store.set_setting("global_shortcut", &shortcut)?;
+        }
         Command::Config { key, value } => {
             if let Some(value) = value {
                 match key.as_str() {

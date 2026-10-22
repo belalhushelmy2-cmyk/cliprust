@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Create a source snapshot and checksums for files actually present, never placeholders."""
-import argparse, hashlib, pathlib, subprocess, tarfile, re
+import os, argparse, hashlib, pathlib, subprocess, tarfile, re
 parser=argparse.ArgumentParser();parser.add_argument('--source',action='store_true');args=parser.parse_args()
 repo=pathlib.Path(__file__).resolve().parents[1]
 version=re.search(r'^version = "([^"]+)"',(repo/'Cargo.toml').read_text(),re.M)[1]
-output=repo/'dist/releases'/version;output.mkdir(parents=True,exist_ok=True)
+output=pathlib.Path(os.environ.get('CLIPRUST_OUTPUT',str(repo/'dist/releases'/version)));output.mkdir(parents=True,exist_ok=True)
 revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
 (output/'SOURCE-REVISION.txt').write_text(revision+'\n')
 if args.source:

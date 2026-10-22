@@ -6,7 +6,8 @@ pkgrel=1
 pkgdesc='Native local clipboard history built with Rust and Slint (development release)'
 arch=('x86_64' 'aarch64')
 license=('GPL-3.0-only')
-depends=('fontconfig' 'libxkbcommon' 'libx11' 'libxcb' 'wayland')
+depends=('fontconfig' 'libxkbcommon' 'libx11' 'libxcb' 'libxcursor' 'libxi' 'libxrandr' 'libxkbcommon-x11' 'wayland' 'xkeyboard-config' 'ttf-dejavu' 'xdg-utils')
+optdepends=('xdg-desktop-portal: desktop permission services' 'xdg-desktop-portal-gtk: file chooser backend')
 makedepends=('rust' 'cargo' 'pkgconf' 'git')
 options=('!lto')
 

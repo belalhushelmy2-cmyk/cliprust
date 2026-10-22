@@ -21,3 +21,7 @@ Run `python3 scripts/sway-shortcut.py --executable /absolute/path/Cliprust.AppIm
 ## Acceptance test
 
 `python3 tests/native_sway_paste.py` creates an isolated two-output headless Sway session and temporary database. It drives actual keys and checks clipboard consumption in stock GTK and foot; Mousepad receives a separate changed-document/screenshot check when installed. It does not touch the desktop clipboard. Set `CLIPRUST_TEST_BINARY` to an absolute release binary path to test that build.
+
+## Editing shortcuts in Settings
+
+Open Settings, edit Open history (for example `Super+Shift+V`), then Save shortcuts. `Mod`, `Mod4`, `Meta` and `Win` are accepted as aliases for Super. Cliprust follows ordinary include patterns and variable/block bindings, refuses conflicts and ambiguous syntax, backs up the affected file, validates with Sway and reloads. An existing simple Cliprust launcher binding is replaced; if absent, a binding is added to the root config. Paste/Keep Open bindings apply immediately without restarting. Errors stay visible in Settings. Advanced keycode, continuation or ambiguous configurations require manual review rather than risking another binding. The equivalent CLI is `cliprust setup-shortcut Super+V`.

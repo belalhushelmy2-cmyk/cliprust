@@ -2,6 +2,29 @@ use super::{Event, Target};
 use anyhow::{Context, Result, bail};
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
 use futures_util::StreamExt;
+use std::sync::atomic::{AtomicU32, Ordering};
+static CONFIGURE: tokio::sync::Notify = tokio::sync::Notify::const_new();
+static VERSION: AtomicU32 = AtomicU32::new(0);
+pub fn configure() -> Result<()> {
+    match VERSION.load(Ordering::Acquire) {
+        0 => bail!(
+            "Desktop Global Shortcuts portal unavailable. Set a custom desktop shortcut to cliprust --toggle."
+        ),
+        1 => bail!(
+            "This desktop's shortcut portal cannot open shortcut settings. Change the launcher in desktop keyboard settings; paste shortcuts apply immediately."
+        ),
+        _ => {
+            CONFIGURE.notify_one();
+            Ok(())
+        }
+    }
+}
+struct Registration;
+impl Drop for Registration {
+    fn drop(&mut self) {
+        VERSION.store(0, Ordering::Release);
+    }
+}
 
 /// Registers the launcher shortcut through the user's desktop portal. The
 /// compositor decides whether to accept the preferred trigger and may present
@@ -39,7 +62,7 @@ pub fn hotkey(
         let shortcut =
             NewShortcut::new("cliprust-toggle-history", "Show clipboard history")
                 .preferred_trigger(Some(trigger.as_str()));
-        let _ = tx.try_send(Event::Diagnostic("Desktop shortcut permission requested. If Meta+V belongs to Klipper, choose an alternative in the portal or KDE System Settings → Keyboard → Shortcuts; Cliprust will not replace it.".into()));
+        let _ = tx.try_send(Event::Diagnostic("Desktop shortcut permission requested. Choose an available launcher shortcut in your desktop dialog; existing bindings will not be replaced.".into()));
         let bound = portal
             .bind_shortcuts(&session, &[shortcut], None, Default::default())
             .await
@@ -51,8 +74,22 @@ pub fn hotkey(
             .context("Portal did not register Show clipboard history; choose a free shortcut in desktop settings")?;
         let _ = tx.try_send(Event::Diagnostic(format!("Clipboard shortcut registered: {}", registered.trigger_description())));
         // Scope signals to this session; other apps can use the same shortcut ID.
+        let _registration = Registration;
+        VERSION.store(portal.version(), Ordering::Release);
         let session_path = serde_json::to_value(&session)?.as_str().context("Invalid portal session path")?.to_owned();
-        while let Some(event) = activated.next().await {
+        loop {
+            let event = match futures_util::future::select(
+                Box::pin(activated.next()), Box::pin(CONFIGURE.notified())
+            ).await {
+                futures_util::future::Either::Left((Some(event), _)) => event,
+                futures_util::future::Either::Left((None, _)) => break,
+                futures_util::future::Either::Right(_) => {
+                    if let Err(error)=portal.configure_shortcuts(&session, None, Default::default()).await {
+                        let _=tx.try_send(Event::Diagnostic(format!("Desktop shortcut settings failed: {error}")));
+                    }
+                    continue;
+                }
+            };
             if event.session_handle().as_str() != session_path || event.shortcut_id() != "cliprust-toggle-history" {
                 continue;
             }

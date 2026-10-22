@@ -77,7 +77,7 @@ mod imp {
             .context("user configuration directory unavailable")?
             .config_dir()
             .to_owned();
-        let executable = std::env::current_exe().context("resolve Cliprust executable")?;
+        let executable = super::super::launcher_path().context("resolve Cliprust launcher")?;
         set_at(&config_dir, &executable, enabled)
     }
 
@@ -189,7 +189,7 @@ mod imp {
         let key_path = wide(RUN_KEY);
         let value_name = wide(VALUE_NAME);
         let command_data = if enabled {
-            let executable = std::env::current_exe().context("resolve Cliprust executable")?;
+            let executable = super::super::launcher_path().context("resolve Cliprust launcher")?;
             let command = format!("{} --show", quote_windows_argument(executable.as_os_str()));
             Some(wide(&command))
         } else {

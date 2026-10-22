@@ -271,14 +271,17 @@ export component AppWindow inherits Window {
                         Text {text:"History files (choose a new filename when saving)";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
                         for action in ["backup","restore-backup","export-history","import-history"] : Chip {text:action;clicked=>{root.action(action);root.settings-open=false;}}
                         Text {text:"Restore merges backup history and snippets into your current history. Current settings are kept.";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
-                        Text {text:"Shortcuts — restart Cliprust after saving";color:AppPalette.text_secondary;font-size:12px;}
+                        Text {text:"Shortcuts — paste changes apply immediately";color:AppPalette.text_secondary;font-size:12px;}
+                        Text {text:"Use Super (Meta/Mod), Ctrl, Alt or Shift, e.g. Super+V. On Wayland, your desktop may ask you to choose the launcher shortcut.";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
                         Text {text:"Open history";color:AppPalette.text_secondary;font-size:12px;}
                         LineEdit {text <=> root.global-shortcut;}
                         Text {text:"Paste";color:AppPalette.text_secondary;font-size:12px;}
                         LineEdit {text <=> root.paste-shortcut;}
                         Text {text:"Paste and Keep Open";color:AppPalette.text_secondary;font-size:12px;}
                         LineEdit {text <=> root.keep-shortcut;}
-                        Chip {text:"Save shortcuts";clicked=>{root.save-shortcuts(root.global-shortcut,root.paste-shortcut,root.keep-shortcut);root.settings-open=false;}}
+                        Chip {text:"Save shortcuts";clicked=>{root.save-shortcuts(root.global-shortcut,root.paste-shortcut,root.keep-shortcut);}}
+                        Chip {text:"Desktop launcher shortcut";clicked=>{root.action("configure-launcher");}}
+                        Text {text:root.status;color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
                         Chip {text:"Clear recent searches";clicked=>{root.action("clear-searches");}}
                         Text {text:"Excluded applications — one name per line";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
                         TextEdit {height:60px;text <=> root.excluded-apps;}

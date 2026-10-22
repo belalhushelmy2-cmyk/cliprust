@@ -112,3 +112,12 @@ Normal invocation `--version` passed. Extract-and-run mode passed version, isola
 - NSIS compiled without warnings. Its extracted `cliprust.exe` SHA-256 matches the full Windows cross-build and portable ZIP; PE/import inspection found only Windows system DLL imports. Actual Windows installation/uninstallation, Windows clipboard/hotkey/paste, and an independent X11 desktop were not available for runtime acceptance. The installer is unsigned.
 - These are x86_64 development packages for glibc >= 2.35, not binaries for every Linux version/architecture. Alpine/musl, ARM, 32-bit and older glibc require source builds. GitHub packaging workflows were added but were not run remotely.
 - AppImage compatibility follow-up: matched Fontconfig configuration and X11 compose data are bundled alongside baseline libraries. The packaged Sway acceptance test passes again and asserts no Fontconfig/xkbcommon configuration errors. Explicit Xcursor/Xi/Xrandr/libxkbcommon-x11 dependencies are included for native X11 package installs.
+
+## Bundled runtime and shortcut follow-up (2026-10-22)
+
+- Rust unit/integration suite: 38 passed, one explicit benchmark ignored. Formatting and Clippy with warnings denied passed.
+- `tests/native_shortcut_setup.py`: isolated Sway test passed for native config editing, live old/new key behavior, variable/include conflict detection, backups and rollback after invalid configuration. It does not modify the user's desktop config.
+- `tests/isolated_linux_runtime.py`: staged runtime launches the real GUI and creates a snapshot with no host application libraries/fonts/FUSE; Unicode database writes passed and `fc-match` selected the bundled DejaVuSans.ttf. The test root contains only glibc and standard shell tools plus an fc-match probe; a private Sway compositor supplies the display socket.
+- Packaged history regression passed on private Sway: initial selection, keyboard search, Enter, repeated Keep Open, stable scroll/selection/order and genuine external clipboard capture.
+- Windows x86_64 GNU release compiled; NSIS installer and portable archive built. Import audit confirms only Windows system DLLs are needed. No Windows desktop runtime or portal-v2 desktop is available here, so those interactive paths are not claimed as verified.
+- Package checks cover DEB/RPM metadata, tar install/uninstall, quoted install paths, self-extracting launch and stdin, AppImage launch, and checksums. Target-distribution installation coverage remains separate from artifact inspection.

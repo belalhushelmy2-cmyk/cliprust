@@ -24,6 +24,8 @@ VIAddVersionKey "LegalCopyright" "Cliprust contributors"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\cliprust.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Start Cliprust"
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
