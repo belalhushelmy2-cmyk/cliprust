@@ -2,7 +2,7 @@
 """Create a FUSE-free single-file launcher containing the complete runtime."""
 import pathlib,sys,tarfile
 root=pathlib.Path(sys.argv[1]);output=pathlib.Path(sys.argv[2])
-header='#!/bin/sh\nset -eu\nself=$(readlink -f "$0")\nwork=$(mktemp -d "${TMPDIR:-/tmp}/cliprust-runtime.XXXXXXXX")\ntrap \'rm -rf "$work"\' EXIT\ntrap \'exit 130\' INT\ntrap \'exit 143\' TERM\nexport CLIPRUST_LAUNCHER="$self"\ntail -n +__LINE__ "$self" | tar -xz -C "$work"\n"$work/AppRun" "$@" <&0 &\nchild=$!\ntrap \'kill "$child" 2>/dev/null || :; wait "$child" 2>/dev/null || :; exit 143\' TERM INT\nwait "$child"\nexit $?\n'
+header='#!/bin/sh\nset -eu\nself=$(readlink -f "$0")\nwork=$(mktemp -d "${TMPDIR:-/tmp}/cliprust-runtime.XXXXXXXX")\ntrap \'rm -rf "$work"\' EXIT\ntrap \'exit 130\' INT\ntrap \'exit 143\' TERM\nexport CLIPRUST_LAUNCHER="$self"\nexec 3<&0\ntail -n +__LINE__ "$self" | tar --no-same-owner -xz -C "$work"\n"$work/AppRun" "$@" <&3 3<&- &\nchild=$!\ntrap \'kill "$child" 2>/dev/null || :; wait "$child" 2>/dev/null || :; exit 143\' TERM INT\nwait "$child"\nexit $?\n'
 header=header.replace('__LINE__',str(header.count('\n')+1))
 with output.open('wb') as dest:
  dest.write(header.encode())
