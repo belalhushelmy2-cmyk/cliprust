@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Id": "cliprust",
+    "Name": "Cliprust window integration",
+    "Description": "Place Cliprust on the invoking desktop and restore its previous paste target. Requires Cliprust running.",
+    "Version": "0.1.0",
+    "License": "GPL-3.0-only"
+  },
+  "X-Plasma-API": "javascript",
+  "X-Plasma-MainScript": "code/main.js",
+  "KPackageStructure": "KWin/Script"
+}

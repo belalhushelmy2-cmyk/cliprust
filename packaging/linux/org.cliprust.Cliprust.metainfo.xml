@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.cliprust.Cliprust</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="org.cliprust"><name>Cliprust contributors</name></developer>
+  <name>Cliprust</name>
+  <summary>Search and reuse your clipboard locally</summary>
+  <description>
+    <p>Cliprust is a native clipboard history manager with local storage,
+    keyboard navigation, search, pinned items, and reusable text snippets.</p>
+    <p>Keep text, images, and file references together, pause monitoring,
+    and manage history with retention settings and backup tools.</p>
+  </description>
+  <launchable type="desktop-id">cliprust.desktop</launchable>
+  <categories><category>Utility</category></categories>
+  <releases><release version="0.1.0" date="2026-10-22"/></releases>
+  <content_rating type="oars-1.1"/>
+</component>

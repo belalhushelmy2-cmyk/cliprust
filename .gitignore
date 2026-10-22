@@ -1,0 +1,12 @@
+/target/
+/dist/
+*.db
+*.db-shm
+*.db-wal
+
+/packaging/linux/pkg/
+/packaging/linux/src/
+/packaging/linux/*.pkg.tar*
+
+__pycache__/
+*.py[cod]

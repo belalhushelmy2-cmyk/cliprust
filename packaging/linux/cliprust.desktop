@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Cliprust
+GenericName=Clipboard History
+Comment=Search and reuse your clipboard locally
+Exec=cliprust --show
+Icon=cliprust
+Terminal=false
+Categories=Utility;
+StartupNotify=true

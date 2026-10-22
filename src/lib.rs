@@ -1,0 +1,13 @@
+#[cfg(feature = "desktop")]
+pub mod app;
+pub mod grouping;
+pub mod history_session;
+pub mod model;
+pub mod persistence;
+pub mod platform;
+pub mod search;
+pub mod security;
+pub mod shortcuts;
+pub mod snippets;
+#[cfg(feature = "desktop")]
+pub mod tray;

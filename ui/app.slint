@@ -1,0 +1,316 @@
+import { CheckBox, LineEdit, ScrollView, TextEdit, ComboBox, Palette } from "std-widgets.slint";
+export { Palette } from "std-widgets.slint";
+export global AppPalette {
+    in-out property <int> mode: 0;
+    in-out property <bool> system-light: false;
+    out property <bool> light: mode == 1 || (mode == 2 && system-light);
+    out property <color> app_bg: light ? #f5f3f8 : #18181f;
+    out property <color> overlay: light ? #f5f3f8f2 : #18181fef;
+    out property <color> surface_1: light ? #ffffff : #1e1e26;
+    out property <color> surface_2: light ? #fbfaff : #202028;
+    out property <color> surface_3: light ? #f0edf4 : #22212a;
+    out property <color> surface_4: light ? #ffffff : #24232c;
+    out property <color> border: light ? #d8d2e0 : #383840;
+    out property <color> border_strong: light ? #beb6ca : #46404f;
+    out property <color> text: light ? #27232e : #f3effa;
+    out property <color> text_secondary: light ? #655f70 : #a8a6b2;
+    out property <color> muted: light ? #827d8b : #777381;
+    out property <color> accent: light ? #8b6bbd : #b39acb;
+    out property <color> accent_text: light ? #76529f : #e3d3ff;
+    out property <color> accent_surface: light ? #ede6f7 : #363346;
+    out property <color> accent_border: light ? #9c83bd : #70618f;
+    out property <color> selected: light ? #e7def2 : #363041;
+    out property <color> hover: light ? #f4f1f8 : #282630;
+    out property <color> icon_bg: light ? #efeaf6 : #2d2936;
+    out property <color> brand: #af95e5;
+    out property <color> brand_text: #211931;
+}
+export struct HistoryRow { id: string, group: string, offset: int, title: string, subtitle: string, badge: string, pinned: bool }
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked;
+    height: 30px; min-width: max(64px,caption.preferred-width + 22px); border-radius: 7px;
+    background: active ? AppPalette.accent_surface : touch.has-hover ? AppPalette.hover : AppPalette.surface_3;
+    border-width: 1px; border-color: active ? AppPalette.accent_border : AppPalette.border;
+    caption := Text { text: root.text; color: root.active ? AppPalette.accent_text : AppPalette.text_secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+    touch := TouchArea { clicked => {root.clicked();} }
+}
+export component AppWindow inherits Window {
+    title: "Cliprust · Clipboard History"; preferred-width: 860px; preferred-height: 580px;
+    min-width: 740px; min-height: 480px;
+    background: AppPalette.app_bg; default-font-family: "Inter"; default-font-size: 13px;
+    in property <[HistoryRow]> rows;
+    in property <int> rows-height;
+    in-out property <string> grouping: "none";
+    callback change-group(string);
+    in-out property <int> selected: 0;
+    in-out property <string> query;
+    in property <[string]> recent-searches: ["Recent searches"];
+    in property <string> preview;
+    in property <image> preview-image;
+    in property <bool> has-image: false;
+    in property <string> details;
+    in property <string> status: "Starting clipboard monitor…";
+    in property <bool> paused: false;
+    in property <bool> paste-supported: false;
+    in-out property <bool> actions-open: false;
+    in-out property <bool> editor-open: false;
+    in-out property <bool> settings-open: false;
+    in-out property <string> retention-limit: "10000";
+    in-out property <string> retention-days: "30";
+    in-out property <int> theme-index: 0;
+    in property <[string]> source-options: ["All applications"];
+    in-out property <string> source-selection: "All applications";
+    in-out property <bool> launch-at-login: false;
+    in-out property <bool> compact: false;
+    in-out property <bool> favorites: false;
+    in-out property <string> type-filter: "all";
+    in-out property <string> date-filter: "all";
+    in-out property <string> edit-body;
+    in-out property <string> edit-name;
+    in-out property <string> edit-tags;
+    in-out property <string> edit-abbreviation;
+    in-out property <bool> snippet-edit: false;
+    in-out property <bool> edit-pinned: false;
+    callback search(string);
+    callback select-row(string);
+    callback action(string);
+    callback filter(string,bool,string,string);
+    callback save-edit(string,string,string,string,bool,bool);
+    in-out property <string> excluded-apps: "";
+    in-out property <string> global-shortcut: "Super+V";
+    in-out property <string> paste-shortcut: "Enter";
+    in-out property <string> keep-shortcut: "Ctrl+Enter";
+    callback save-shortcuts(string,string,string);
+    callback save-settings(string,string,bool,int,string);
+    in property <string> actions-hint: "Ctrl+K";
+    in property <string> search-hint: "Ctrl+F";
+    in property <string> paste-hint: "Enter";
+    in property <string> keep-open-hint: "Ctrl+Enter";
+    callback resolve-shortcut(string,bool,bool,bool,bool) -> string;
+    callback dismiss;
+    public function focus-list() {keys.focus();}
+    public function focus-search() {search-field.focus();}
+    function move-selection(delta:int) {
+        if root.rows.length > 0 {
+            root.selected = max(0,min(root.rows.length - 1,root.selected + delta));
+            root.select-row(root.rows[root.selected].id);
+        }
+    }
+    forward-focus: keys;
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape { if root.editor-open {root.editor-open=false;} else if root.settings-open {root.settings-open=false;} else if root.actions-open {root.actions-open=false;} else if root.query != "" {root.query="";root.search("");keys.focus();} else {root.dismiss();} return accept; }
+            if !root.editor-open && !root.settings-open {
+                if event.modifiers.control && event.modifiers.shift && event.text == Key.UpArrow {root.action("pin-up");return accept;}
+                if event.modifiers.control && event.modifiers.shift && event.text == Key.DownArrow {root.action("pin-down");return accept;}
+                if event.text == Key.DownArrow {root.move-selection(1); return accept;}
+                if event.text == Key.UpArrow {root.move-selection(-1); return accept;}
+                let key = event.text == "\n" || event.text == Key.Return ? "enter" : event.text == Key.Delete ? "delete" : event.text;
+                let command = root.resolve-shortcut(key,event.modifiers.control,event.modifiers.alt,event.modifiers.shift,event.modifiers.meta);
+                if command == "actions" {root.actions-open=!root.actions-open;return accept;}
+                if command == "search-focus" {search-field.focus();return accept;}
+                if command != "" {root.action(command);return accept;}
+                if !root.actions-open && !event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta && event.text != "" && event.text >= " " && (event.text < "\u{f700}" || event.text > "\u{f8ff}") && event.text != Key.Delete {
+                    root.query += event.text;
+                    search-field.focus();
+                    search-field.set-selection-offsets(root.query.character-count,root.query.character-count);
+                    root.search(root.query);
+                    return accept;
+                }
+            }
+            return reject;
+        }
+        VerticalLayout {
+            padding: 14px; spacing: 10px;
+            HorizontalLayout {
+                spacing: 10px;
+                Rectangle { width: 32px; height: 32px; border-radius: 10px; background: AppPalette.brand;
+                    Text {text: "C"; color: AppPalette.brand_text; font-size: 21px; font-weight: 800; horizontal-alignment: center;vertical-alignment:center;}
+                }
+                VerticalLayout {spacing: 2px;Text {text: "Cliprust";color:AppPalette.text;font-size:19px;font-weight:700;}Text {text:"CLIPBOARD HISTORY";color:AppPalette.muted;font-size:9px;letter-spacing:1px;} }
+                Rectangle {horizontal-stretch:1;}
+                Chip {text:root.paused ? "Resume" : "Pause";clicked=>{root.action("pause");}}
+                Chip {text:"Settings";clicked=>{root.action("settings");}}
+                Chip {text:root.compact ? "Expand" : "Compact";clicked=>{root.compact=!root.compact;}}
+                Chip {text:"Hide";clicked=>{root.dismiss();}}
+                Chip {text:"Quit";clicked=>{root.action("quit");}}
+            }
+            Rectangle {
+                height: 48px; border-radius: 10px; border-width: 1px; border-color: AppPalette.border_strong; background: AppPalette.surface_3;
+                HorizontalLayout {padding: 8px;spacing:10px;
+                    Text {text:"⌕";color:AppPalette.accent;font-size:27px;width:28px;horizontal-alignment:center;}
+                    search-field := LineEdit {text <=> root.query;placeholder-text:"Search your clipboard…";edited=>{root.search(self.text);}
+                        key-pressed(event)=>{
+                            if event.text == "\n" || event.text == Key.Return {
+                                let command = root.resolve-shortcut("enter",event.modifiers.control,event.modifiers.alt,event.modifiers.shift,event.modifiers.meta);
+                                if command != "" {root.action(command);return accept;}
+                            }
+                            return reject;
+                        }
+                    }
+                    ComboBox {width:160px;model:root.recent-searches;current-index:0;
+                        selected(value)=>{if self.current-index > 0 {root.query=value;root.search(value);search-field.focus();}self.current-index=0;}
+                    }
+                    Text {text:root.search-hint;color:AppPalette.muted;font-size:11px;vertical-alignment:center;}
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                for kind in ["all","text","image","files","link","color","snippets"] : Chip {
+                    text:kind;active:root.type-filter==kind;
+                    clicked=>{root.type-filter=kind;root.filter(root.type-filter,root.favorites,root.date-filter,root.source-selection=="All applications" ? "" : root.source-selection);}
+                }
+                Rectangle {horizontal-stretch:1;}
+                Chip {text:"★ Pinned";active:root.favorites;clicked=>{root.favorites=!root.favorites;root.filter(root.type-filter,root.favorites,root.date-filter,root.source-selection=="All applications" ? "" : root.source-selection);}}
+            }
+            HorizontalLayout {spacing:8px;
+                Text {text:"DATE";color:AppPalette.muted;font-size:10px;vertical-alignment:center;}
+                for period in ["all","today","yesterday","last7"] : Chip {
+                    text:period;active:root.date-filter==period;
+                    clicked=>{root.date-filter=period;root.filter(root.type-filter,root.favorites,root.date-filter,root.source-selection=="All applications" ? "" : root.source-selection);}
+                }
+                Text {text:"APP";color:AppPalette.muted;font-size:10px;vertical-alignment:center;}
+                ComboBox {
+                    model:root.source-options;
+                    current-value <=> root.source-selection;
+                    selected(value)=>{root.source-selection=value;root.filter(root.type-filter,root.favorites,root.date-filter,value=="All applications" ? "" : value);}
+                }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                Rectangle {
+                    horizontal-stretch: 1; background: AppPalette.surface_1; border-radius: 10px; border-width:1px;border-color:AppPalette.border;
+                    VerticalLayout {
+                        padding: 10px;spacing:6px;
+                        HorizontalLayout {spacing:8px;
+                            Text {text: root.rows.length + " ITEMS";color:AppPalette.muted;font-size:10px;vertical-alignment:center;}
+                            Text {text:"GROUP";color:AppPalette.muted;font-size:10px;vertical-alignment:center;}
+                            ComboBox {model:["none","date","pins","type","application"];current-value <=> root.grouping;selected(value)=>{root.change-group(value);}}
+                        }
+                        ScrollView {
+                            content-y: -max(0px,min((root.rows.length > 0 ? root.rows[root.selected].offset * 1px : 0px) - self.height / 2,root.rows-height * 1px - self.height));
+                            VerticalLayout {spacing:4px;
+                                for row[index] in root.rows : Rectangle {
+                                    height:row.group == "" ? 66px : 90px;
+                                    if row.group != "" : Text {x:0px;y:0px;width:parent.width;text:row.group;height:24px;color:AppPalette.text_secondary;font-size:11px;vertical-alignment:center;}
+                                    Rectangle {y:row.group == "" ? 0px : 24px;width:parent.width;height:66px; border-radius:8px;
+                                    background:root.selected==index ? AppPalette.selected : hover.has-hover ? AppPalette.hover : transparent;
+                                    border-width:1px;border-color:root.selected==index ? AppPalette.accent_border : transparent;
+                                    HorizontalLayout {padding:10px;spacing:10px;
+                                        Rectangle {width:34px;height:34px;border-radius:8px;background:AppPalette.icon_bg;
+                                            Text {text:row.badge;color:AppPalette.accent_text;font-size:13px;horizontal-alignment:center;vertical-alignment:center;}
+                                        }
+                                        VerticalLayout {spacing:5px;
+                                            Text {text:row.title;color:AppPalette.text;font-size:13px;overflow:elide;wrap:no-wrap;}
+                                            Text {text:row.subtitle;color:AppPalette.text_secondary;font-size:10px;overflow:elide;wrap:no-wrap;}
+                                        }
+                                        Text {text:row.pinned ? "★" : "";color:AppPalette.accent_text;width:16px;}
+                                    }
+                                    hover := TouchArea {clicked=>{root.selected=index;root.select-row(row.id);keys.focus();} double-clicked=>{root.action("copy");}}
+                                    }
+                                }
+                                if root.rows.length == 0 : Text {text:"Nothing here yet.\nCopy something to begin.";color:AppPalette.text_secondary;horizontal-alignment:center;vertical-alignment:center;height:180px;}
+                            }
+                        }
+                    }
+                }
+                if !root.compact : Rectangle {
+                    width:280px;background:AppPalette.surface_2;border-radius:10px;border-width:1px;border-color:AppPalette.border;
+                    VerticalLayout {padding:12px;spacing:10px;
+                        Text {text:"PREVIEW";color:AppPalette.text_secondary;font-size:10px;letter-spacing:1px;}
+                        if root.has-image : Image {source:root.preview-image;image-fit:contain;height:210px;}
+                        if !root.has-image : TextEdit {text:root.preview;read-only:true;wrap:word-wrap;}
+                        Rectangle {vertical-stretch:1;}
+                        Rectangle {height:1px;background:AppPalette.border;}
+                        Text {text:root.details;color:AppPalette.text_secondary;font-size:11px;wrap:word-wrap;}
+                        Chip {text:"Copy to Clipboard";clicked=>{root.action("copy");}}
+                        Chip {text:"Paste · " + root.paste-hint;clicked=>{root.action("paste");}}
+                        Chip {text:"Paste and Keep Open · " + root.keep-open-hint;clicked=>{root.action("keep-open");}}
+                    }
+                }
+            }
+            HorizontalLayout {spacing:10px;height:28px;
+                Text {text:root.status;color:AppPalette.text_secondary;font-size:11px;overflow:elide;vertical-alignment:center;horizontal-stretch:1;}
+                Chip {text:"New snippet";clicked=>{root.snippet-edit=true;root.edit-pinned=false;root.edit-name="";root.edit-body="";root.edit-tags="";root.edit-abbreviation="";root.editor-open=true;}}
+                Chip {text:"Actions  " + root.actions-hint;active:root.actions-open;clicked=>{root.actions-open=!root.actions-open;}}
+            }
+        }
+        if root.actions-open : Rectangle {
+            x:parent.width - self.width - 24px;y:145px;width:276px;height:490px;background:AppPalette.surface_4;border-radius:12px;border-width:1px;border-color:AppPalette.accent_border;
+            VerticalLayout {padding:12px;spacing:6px;
+                Text {text:"ACTIONS";color:AppPalette.text_secondary;font-size:10px;height:22px;}
+                ScrollView { height:430px;
+                    VerticalLayout {spacing:6px;
+                        for label in ["paste","keep-open","plain-paste","plain-keep-open","copy","plain-copy","copy-image","copy-path","pin","edit","duplicate","save-snippet","delete","clear-unpinned","export-entry","open","save-image"] : Chip {
+                            text:label;clicked=>{root.actions-open=false;root.action(label);}
+                        }
+                    }
+                }
+            }
+        }
+        if root.settings-open : Rectangle {
+            background:AppPalette.overlay;
+            VerticalLayout {padding:24px;spacing:16px;
+                Rectangle {horizontal-stretch:1;vertical-stretch:1;}
+                HorizontalLayout {spacing:0px;
+                    Rectangle {horizontal-stretch:1;}
+                    Rectangle {width:560px;height:min(root.height - 48px, 600px);background:AppPalette.surface_4;border-radius:14px;border-width:1px;border-color:AppPalette.accent_border;
+                    ScrollView {
+                    VerticalLayout {padding:24px;spacing:14px;
+                        Text {text:"History settings";color:AppPalette.text;font-size:22px;font-weight:700;}
+                        Text {text:"Choose how much clipboard history to keep. Pinned items are exempt.";color:AppPalette.text_secondary;wrap:word-wrap;}
+                        Text {text:"Maximum unpinned entries (0–1,000,000)";color:AppPalette.text_secondary;font-size:12px;}
+                        LineEdit {text <=> root.retention-limit;placeholder-text:"10000";}
+                        Text {text:"Days to keep unpinned entries (0 keeps them indefinitely)";color:AppPalette.text_secondary;font-size:12px;}
+                        LineEdit {text <=> root.retention-days;placeholder-text:"30";}
+                        CheckBox {text:"Launch Cliprust when I sign in";checked <=> root.launch-at-login;}
+                        Text {text:"Appearance";color:AppPalette.text_secondary;font-size:12px;}
+                        ComboBox {model:["Dark","Light","System"];current-index <=> root.theme-index;}
+                        Text {text:"History files (choose a new filename when saving)";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
+                        for action in ["backup","restore-backup","export-history","import-history"] : Chip {text:action;clicked=>{root.action(action);root.settings-open=false;}}
+                        Text {text:"Restore merges backup history and snippets into your current history. Current settings are kept.";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
+                        Text {text:"Shortcuts — restart Cliprust after saving";color:AppPalette.text_secondary;font-size:12px;}
+                        Text {text:"Open history";color:AppPalette.text_secondary;font-size:12px;}
+                        LineEdit {text <=> root.global-shortcut;}
+                        Text {text:"Paste";color:AppPalette.text_secondary;font-size:12px;}
+                        LineEdit {text <=> root.paste-shortcut;}
+                        Text {text:"Paste and Keep Open";color:AppPalette.text_secondary;font-size:12px;}
+                        LineEdit {text <=> root.keep-shortcut;}
+                        Chip {text:"Save shortcuts";clicked=>{root.save-shortcuts(root.global-shortcut,root.paste-shortcut,root.keep-shortcut);root.settings-open=false;}}
+                        Chip {text:"Clear recent searches";clicked=>{root.action("clear-searches");}}
+                        Text {text:"Excluded applications — one name per line";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
+                        TextEdit {height:60px;text <=> root.excluded-apps;}
+                        Text {text:"Matches identified clipboard owners only. Unknown sources, including Wayland, cannot be excluded by name. Use Pause for those.";color:AppPalette.text_secondary;font-size:12px;wrap:word-wrap;}
+                        HorizontalLayout {spacing:10px;
+                            Rectangle {horizontal-stretch:1;}
+                            Chip {text:"Cancel";clicked=>{root.settings-open=false;}}
+                            Chip {text:"Save settings";active:true;clicked=>{root.save-settings(root.retention-limit,root.retention-days,root.launch-at-login,root.theme-index,root.excluded-apps);root.settings-open=false;}}
+                        }
+                    }
+                    }
+                    }
+                    Rectangle {horizontal-stretch:1;}
+                }
+                Rectangle {horizontal-stretch:1;vertical-stretch:1;}
+            }
+        }
+        if root.editor-open : Rectangle {
+            background:AppPalette.overlay;
+            VerticalLayout {padding:40px;spacing:12px;
+                Text {text:root.snippet-edit ? "Save snippet" : "Edit text as a new entry";color:AppPalette.text;font-size:22px;}
+                if root.snippet-edit : LineEdit {text <=> root.edit-name;placeholder-text:"Snippet name";}
+                if root.snippet-edit : LineEdit {text <=> root.edit-tags;placeholder-text:"Tags, separated by commas";}
+                if root.snippet-edit : LineEdit {text <=> root.edit-abbreviation;placeholder-text:"Abbreviation (search alias)";}
+                if root.snippet-edit : CheckBox {text:"Pinned favorite";checked <=> root.edit-pinned;}
+                edit := TextEdit {text <=> root.edit-body;}
+                Text {text:root.snippet-edit ? "Placeholders: {{date}}  {{time}}  {{clipboard}}" : "The original entry is preserved.";color:AppPalette.muted;}
+                HorizontalLayout {
+                    Chip {text:"Cancel";clicked=>{root.editor-open=false;}}
+                    Chip {text:"Save";active:true;clicked=>{root.save-edit(root.edit-name,root.edit-body,root.edit-tags,root.edit-abbreviation,root.snippet-edit,root.edit-pinned);root.editor-open=false;}}
+                }
+            }
+        }
+    }
+}
