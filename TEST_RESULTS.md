@@ -127,3 +127,10 @@ Normal invocation `--version` passed. Extract-and-run mode passed version, isola
 - Replaced the history scroll-position binding with an explicit reveal-selection operation on arrow navigation and list refresh. It scrolls only enough to show the selected row, includes group-header height, and clamps to the viewport bounds.
 - Private Sway regression passed: newest selection beneath 12 pinned entries, 12 Up / 14 Down / 2 Up steps with screenshot assertions that the selected border remains visible, immediate Enter, and repeated Keep Open preserving identical viewport pixels. External-copy and search/session regressions also passed.
 - Rust tests (38 passed, one benchmark ignored), formatting and Clippy passed. Windows and independent X11 runtime checks were not performed for this change.
+
+## 2026-10-23 — v0.1.1 published packages
+
+- Published https://github.com/belalhushelmy2-cmyk/cliprust/releases/tag/v0.1.1 from build commit 4c8192826a1385e908bd150d797c8f7aca3c0ed2. GitHub Actions run 39880400944 completed successfully: Ubuntu 22.04 and Windows checks, Linux packages, Windows MSVC static-CRT installer/portable ZIP.
+- Linux CI passed 38 tests; Windows CI passed 31 tests (one benchmark ignored on each), formatting and Clippy. Linux package smoke tests passed. Downloaded CI AppImage passed private Sway history/auto-scroll/keep-open acceptance and isolated runtime/font verification. Windows release --version passed in CI; installer and ZIP executable hashes match and import audit passes.
+- Verified both workflow artifact digests and all 16 final GitHub asset sizes/SHA256 digests. SHA256SUMS and VALIDATION.txt accompany downloads. Updated the local AppImage to the same verified v0.1.1 Linux package.
+- Windows desktop GUI/clipboard and independent X11 desktop acceptance remain unverified; installers are unsigned. See the release VALIDATION.txt for exact coverage.

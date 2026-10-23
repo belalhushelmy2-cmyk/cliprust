@@ -80,3 +80,10 @@ Sway delivery verified: rebuilt `dist/Cliprust.AppImage`, checked its checksum a
 ## 2026-10-23 — v0.1.1 release preparation
 
 - Bumped the patch version for the keyboard auto-scroll fix. Dependency notice generation may fetch locked crates for other targets, fixing clean CI packaging failures caused by offline metadata resolution.
+
+## 2026-10-23 — v0.1.1 published packages
+
+- Published https://github.com/belalhushelmy2-cmyk/cliprust/releases/tag/v0.1.1 from build commit 4c8192826a1385e908bd150d797c8f7aca3c0ed2. GitHub Actions run 39880400944 completed successfully: Ubuntu 22.04 and Windows checks, Linux packages, Windows MSVC static-CRT installer/portable ZIP.
+- Linux CI passed 38 tests; Windows CI passed 31 tests (one benchmark ignored on each), formatting and Clippy. Linux package smoke tests passed. Downloaded CI AppImage passed private Sway history/auto-scroll/keep-open acceptance and isolated runtime/font verification. Windows release --version passed in CI; installer and ZIP executable hashes match and import audit passes.
+- Verified both workflow artifact digests and all 16 final GitHub asset sizes/SHA256 digests. SHA256SUMS and VALIDATION.txt accompany downloads. Updated the local AppImage to the same verified v0.1.1 Linux package.
+- Windows desktop GUI/clipboard and independent X11 desktop acceptance remain unverified; installers are unsigned. See the release VALIDATION.txt for exact coverage.
