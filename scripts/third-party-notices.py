@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Collect locally available Cargo dependency licenses for distribution payloads."""
 import json, pathlib, subprocess, sys, tempfile, os
-metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--offline', '--format-version', '1']))
+# Cargo builds fetch only their target dependencies; metadata also needs other platforms.
+metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1']))
 output = pathlib.Path(sys.argv[1])
 output.parent.mkdir(parents=True, exist_ok=True)
 with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=output.parent, delete=False) as result:

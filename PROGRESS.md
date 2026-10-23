@@ -76,3 +76,7 @@ Sway delivery verified: rebuilt `dist/Cliprust.AppImage`, checked its checksum a
 - Private Sway regression passed: newest selection beneath 12 pinned entries, 12 Up / 14 Down / 2 Up steps with screenshot assertions that the selected border remains visible, immediate Enter, and repeated Keep Open preserving identical viewport pixels. External-copy and search/session regressions also passed.
 - Rust tests (38 passed, one benchmark ignored), formatting and Clippy passed. Windows and independent X11 runtime checks were not performed for this change.
 - Rebuilt and verified the local AppImage with the same private Sway suite, then replaced dist/Cliprust.AppImage and restarted the user's app successfully. This local build uses the current host runtime; published cross-distribution release assets were not changed.
+
+## 2026-10-23 — v0.1.1 release preparation
+
+- Bumped the patch version for the keyboard auto-scroll fix. Dependency notice generation may fetch locked crates for other targets, fixing clean CI packaging failures caused by offline metadata resolution.
