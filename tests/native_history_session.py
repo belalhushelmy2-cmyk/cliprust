@@ -73,10 +73,24 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
    # The list viewport only, excluding the status line, search caret, and target editor.
    cropped=Image.open(path).convert('RGB').crop((x+25,y+245,x+w//2,y+h-65))
    return cropped.tobytes()
+  def assert_selection_visible():
+   list_pixels() # Refresh the screenshot after layout/rendering.
+   rectangle=find('cliprust')['rect']
+   image=Image.open(root/'screen.png').convert('RGB')
+   x,y=rectangle['x'],rectangle['y']
+   # The selected row's vertical border must be fully inside the viewport.
+   border=(112,97,143)
+   ys=[dy for dy in range(245,rectangle['height']-65)
+       if image.getpixel((x+24,y+dy))==border]
+   assert ys and max(ys)-min(ys)>=48, 'Keyboard selection is clipped or outside the viewport'
   hide()
   for value in ['First copy','Second copy','Newest مرحبا']:
    publish(value);time.sleep(1.05)
   sway('[app_id="cliprust-paste-receiver"] focus');summon()
+  assert_selection_visible()
+  for direction in ['Up']*12+['Down']*14+['Up']*2:
+   key('-k',direction)
+   assert_selection_visible()
   key('-k','Return');wait(lambda:text()=='Newest مرحبا');wait(lambda:find('cliprust') is None)
   assert copies('Newest مرحبا')==1 # Only the genuine copy, no self capture.
   summon();key('-k','Down');key('-k','Up');key('-k','Down');before=list_pixels();key('-M','ctrl','-k','Return','-m','ctrl')
@@ -107,7 +121,7 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
   if binary.suffix=='.AppImage':
    assert 'Fontconfig error:' not in (root/'log').read_text()
    assert 'xkbcommon: ERROR:' not in (root/'log').read_text()
-  print('PASS: newest external copy selected beneath pins; Enter without click; Down navigation; typing-to-search; Escape clear/close; repeated Ctrl+Enter preserves exact list pixels/selection/scroll; self writes suppressed; identical/new external copies recorded without visible changes; reopen refreshes and selects latest')
+  print('PASS: newest external copy selected beneath pins; Enter without click; full Up/Down traversal keeps selection visible; typing-to-search; Escape clear/close; repeated Ctrl+Enter preserves exact list pixels/selection/scroll; self writes suppressed; identical/new external copies recorded without visible changes; reopen refreshes and selects latest')
  except Exception:
   subprocess.run(['grim','/tmp/cliprust-sway-failure.png'],env=env)
   print('CLIPRUST:',find('cliprust'))

@@ -92,9 +92,22 @@ export component AppWindow inherits Window {
     callback dismiss;
     public function focus-list() {keys.focus();}
     public function focus-search() {search-field.focus();}
+    // Explicit scrolling keeps working after the scrollbar changes content-y.
+    public function reveal-selection() {
+        if root.selected >= 0 && root.selected < root.rows.length {
+            let row = root.rows[root.selected];
+            let top = row.offset * 1px;
+            let bottom = top + (row.group == "" ? 66px : 90px);
+            let viewport = history-scroll.visible-height;
+            let current = -history-scroll.content-y;
+            let desired = top < current ? top : bottom > current + viewport ? bottom - viewport : current;
+            history-scroll.content-y = -max(0px,min(desired,max(0px,root.rows-height * 1px - viewport)));
+        }
+    }
     function move-selection(delta:int) {
         if root.rows.length > 0 {
             root.selected = max(0,min(root.rows.length - 1,root.selected + delta));
+            root.reveal-selection();
             root.select-row(root.rows[root.selected].id);
         }
     }
@@ -189,8 +202,7 @@ export component AppWindow inherits Window {
                             Text {text:"GROUP";color:AppPalette.muted;font-size:10px;vertical-alignment:center;}
                             ComboBox {model:["none","date","pins","type","application"];current-value <=> root.grouping;selected(value)=>{root.change-group(value);}}
                         }
-                        ScrollView {
-                            content-y: -max(0px,min((root.rows.length > 0 ? root.rows[root.selected].offset * 1px : 0px) - self.height / 2,root.rows-height * 1px - self.height));
+                        history-scroll := ScrollView {
                             VerticalLayout {spacing:4px;
                                 for row[index] in root.rows : Rectangle {
                                     height:row.group == "" ? 66px : 90px;

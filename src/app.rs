@@ -306,6 +306,7 @@ impl Worker {
             ui.set_source_options(ModelRc::from(Rc::new(VecModel::from(source_options))));
             ui.set_source_selection(source_selection.into());
             ui.set_selected(selected);
+            ui.invoke_reveal_selection();
             ui.set_status(status.into());
             ui.set_paused(paused);
             crate::tray::set_paused(paused);

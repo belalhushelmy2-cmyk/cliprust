@@ -121,3 +121,9 @@ Normal invocation `--version` passed. Extract-and-run mode passed version, isola
 - Packaged history regression passed on private Sway: initial selection, keyboard search, Enter, repeated Keep Open, stable scroll/selection/order and genuine external clipboard capture.
 - Windows x86_64 GNU release compiled; NSIS installer and portable archive built. Import audit confirms only Windows system DLLs are needed. No Windows desktop runtime or portal-v2 desktop is available here, so those interactive paths are not claimed as verified.
 - Package checks cover DEB/RPM metadata, tar install/uninstall, quoted install paths, self-extracting launch and stdin, AppImage launch, and checksums. Target-distribution installation coverage remains separate from artifact inspection.
+
+## 2026-10-23 — keyboard history auto-scroll
+
+- Replaced the history scroll-position binding with an explicit reveal-selection operation on arrow navigation and list refresh. It scrolls only enough to show the selected row, includes group-header height, and clamps to the viewport bounds.
+- Private Sway regression passed: newest selection beneath 12 pinned entries, 12 Up / 14 Down / 2 Up steps with screenshot assertions that the selected border remains visible, immediate Enter, and repeated Keep Open preserving identical viewport pixels. External-copy and search/session regressions also passed.
+- Rust tests (38 passed, one benchmark ignored), formatting and Clippy passed. Windows and independent X11 runtime checks were not performed for this change.
