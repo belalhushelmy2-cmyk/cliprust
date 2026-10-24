@@ -99,3 +99,10 @@ Sway delivery verified: rebuilt `dist/Cliprust.AppImage`, checked its checksum a
 ## 2026-10-24 — v0.1.2 release preparation
 
 - Bumped the patch version for the compact UI and floating geometry fixes. Linux and Windows packages will be rebuilt in CI; published validation records distinguish automated checks from live desktop acceptance.
+
+## 2026-10-24 — v0.1.2 package validation
+
+- Rebuilt Linux Ubuntu 22.04 packages and Windows MSVC static-CRT installer/ZIP from GitHub commit fedee623557d50cd6c2835c6ce07816ec8712656, Actions run 40048225572. Both checks passed (Linux 39 tests, Windows 31; one ignored benchmark each), formatting and Clippy passed. A transient Chocolatey NSIS download 504 required retrying the Windows packaging job; run attempt 2 succeeded.
+- Verified workflow artifact SHA256, individual manifests and source revisions. Windows installer and portable ZIP contain identical executable SHA256 a80b4815bcc641313d4d6d1943047f695d9114ac0288f01185fd5507a4019235; native Windows CLI and DLL import checks passed.
+- Downloaded AppImage passed SwayFX history/selection/search/scroll/geometry regression. Extracted AppRun passed stock Sway pointer drag/resize, two workspaces/outputs, Arabic/Unicode, image/URI, foot/Mousepad, repeated Keep Open, closed target and native input without wtype. The restricted-PATH pointer harness was supplied only AppRun's standard shell helpers and used direct AppRun for PID identity.
+- Installed the verified CI AppImage locally and confirmed native Wayland app ID, 780×540 floating geometry and connected monitoring. Live Windows, independent X11 and live KDE desktop acceptance remain unverified; Windows installer is unsigned.
