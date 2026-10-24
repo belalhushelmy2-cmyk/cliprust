@@ -95,3 +95,7 @@ Sway delivery verified: rebuilt `dist/Cliprust.AppImage`, checked its checksum a
 - Sway/SwayFX receives Cliprust-only floating/border session rules before mapping, with an explicit stable XDG app ID. This avoids retile flashes in the destination app without editing/reloading user configuration. Remembered size/position survives hide/reopen while the process runs, is bounded to the destination output, and Keep Open restores focus without recentering/resizing. Superseded deferred placement requests are cancelled.
 - Local Rust tests: 39 passed, one benchmark ignored; formatting, Clippy and diff checks passed. Real Wayland pointer acceptance on SwayFX and stock Sway verifies header drag, corner resize, drag after resize, geometry retention, two outputs/workspaces, unaffected destination layout, Arabic/text/image/file paste, foot, Mousepad and closed-target rejection. Packaged history/auto-scroll/focus regression passed; dark/light/settings snapshots were visually checked.
 - KDE geometry logic passed a mocked-workspace check; live KDE, Windows and X11 desktop validation were not performed. This is a local development update; published v0.1.1 release assets were not replaced.
+
+## 2026-10-24 — v0.1.2 release preparation
+
+- Bumped the patch version for the compact UI and floating geometry fixes. Linux and Windows packages will be rebuilt in CI; published validation records distinguish automated checks from live desktop acceptance.
