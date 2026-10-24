@@ -14,10 +14,13 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
  env=dict(os.environ,XDG_RUNTIME_DIR=str(runtime),WLR_BACKENDS='headless',WLR_RENDERER='pixman',WLR_HEADLESS_OUTPUTS='2',WLR_LIBINPUT_NO_DEVICES='1',XDG_CURRENT_DESKTOP='sway',XDG_SESSION_TYPE='wayland',GDK_BACKEND='wayland')
  for k in ['DISPLAY','WAYLAND_DISPLAY','SWAYSOCK','XDG_ACTIVATION_TOKEN']:env.pop(k,None)
  log=open(root/'log','w');processes=[]
- compositor=subprocess.Popen(['sway','--config',str(config)],env=env,stdout=log,stderr=log)
+ compositor=subprocess.Popen([os.environ.get('CLIPRUST_TEST_SWAY','sway'),'--config',str(config)],env=env,stdout=log,stderr=log)
  try:
   wait(lambda:(runtime/'wayland-1').exists());env.update(WAYLAND_DISPLAY='wayland-1',SWAYSOCK=str(next(runtime.glob('sway-ipc.*.sock'))))
-  def sway(command):return json.loads(subprocess.check_output(['swaymsg','-s',env['SWAYSOCK'],command],env=env))
+  def sway(command):
+   reply=json.loads(subprocess.check_output(['swaymsg','-s',env['SWAYSOCK'],command],env=env))
+   assert all(item.get('success') for item in reply), (command,reply)
+   return reply
   def tree():return json.loads(subprocess.check_output(['swaymsg','-s',env['SWAYSOCK'],'-t','get_tree']))
   def nodes(n):return [n]+sum([nodes(c) for k in ['nodes','floating_nodes'] for c in n.get(k,[])],[])
   def find(appid):return next((n for n in nodes(tree()) if (n.get('pid')==app.pid if appid=='cliprust' else n.get('app_id')==appid)),None)
@@ -49,9 +52,41 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
   sway('focus output HEADLESS-1');sway('workspace "acceptance-target"');sway('[app_id="cliprust-paste-receiver"] move container to workspace "acceptance-target"');sway('[app_id="cliprust-paste-receiver"] focus')
   bin_dir=root/'bin';bin_dir.mkdir();wtype=bin_dir/'wtype';wtype.symlink_to(shutil.which('wtype'))
   app_env=dict(env,PATH=str(bin_dir))
+  receiver_geometry=find('cliprust-paste-receiver')['rect'].copy()
   app=subprocess.Popen([str(binary),'--database',db],env=app_env,stdout=log,stderr=log);processes.append(app)
   wait(lambda:focused('cliprust'));time.sleep(.6)
   assert find('cliprust')['rect']['x']<1280
+  assert find('cliprust-paste-receiver')['rect']==receiver_geometry, 'Popup retiled the destination application'
+  initial_geometry=find('cliprust')['rect'].copy()
+  assert (initial_geometry['width'],initial_geometry['height'])==(780,540)
+  from native_pointer import Pointer
+  pointer=Pointer(root,env,log);processes.append(pointer.process);time.sleep(.2)
+  # Drag through the application's own header using real pointer events.
+  pointer.command("absolute",initial_geometry["x"]+130,initial_geometry["y"]+24)
+  pointer.command('button',1);time.sleep(.15)
+  pointer.command('relative',40,0);time.sleep(.15)
+  pointer.command('relative',70,45);time.sleep(.15)
+  pointer.command('button',0);time.sleep(.2)
+  dragged=find('cliprust')['rect']
+  assert dragged['x']>initial_geometry['x'] and dragged['y']>initial_geometry['y'], ('Header drag did not move the floating window',initial_geometry,dragged)
+  pointer.command("absolute",dragged["x"]+dragged["width"]-6,dragged["y"]+dragged["height"]-6)
+  pointer.command('button',1);time.sleep(.15)
+  pointer.command('relative',-80,-80);time.sleep(.15)
+  pointer.command('button',0);time.sleep(.3)
+  custom_geometry=find('cliprust')['rect'].copy()
+  assert (custom_geometry['width'],custom_geometry['height'])==(700,460), custom_geometry
+  # A resize must release Slint's grab, so the next header drag stays a move.
+  pointer.command('absolute',custom_geometry['x']+130,custom_geometry['y']+24)
+  pointer.command('button',1);time.sleep(.15)
+  pointer.command('relative',40,0);time.sleep(.15)
+  pointer.command('relative',-40,20);time.sleep(.15)
+  pointer.command('button',0);time.sleep(.2)
+  moved_again=find('cliprust')['rect'].copy()
+  assert (moved_again['width'],moved_again['height'])==(700,460)
+  assert moved_again['x']!=custom_geometry['x'] or moved_again['y']!=custom_geometry['y'], 'Resize left the pointer grab stuck'
+  custom_geometry=moved_again
+
+
   # Install the exact shortcut into the private compositor, then invoke through real key events.
   sway(f'bindsym Mod4+v exec "{binary}" --database "{db}" --toggle')
   def summon():
@@ -62,14 +97,17 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
   wait(lambda:(root/'text.txt').exists() and 'مرحبا بالعالم' in (root/'text.txt').read_text())
   wait(lambda:find('cliprust') is None)
   first=(root/'text.txt').read_text();assert first=='ArabicAcceptance مرحبا بالعالم — Unicode ∇'
-  summon();search('ArabicAcceptance');key('-M','ctrl','-k','Return','-m','ctrl')
+  summon();assert find('cliprust')['rect']==custom_geometry, 'Reopen reset moved/resized geometry'
+  search('ArabicAcceptance');key('-M','ctrl','-k','Return','-m','ctrl')
   wait(lambda:(root/'text.txt').read_text()==first*2);wait(lambda:focused('cliprust'))
   key('-M','ctrl','-k','Return','-m','ctrl');wait(lambda:(root/'text.txt').read_text()==first*3);wait(lambda:focused('cliprust'))
+  assert find('cliprust')['rect']==custom_geometry, 'Keep Open reset moved/resized geometry'
   # Toggle hides only when focused. The same process returns on another output/workspace.
   key('-M','logo','v','-m','logo');wait(lambda:find('cliprust') is None)
   sway('focus output HEADLESS-2');sway('workspace "acceptance-second"')
   sway('[app_id="cliprust-paste-receiver"] move container to workspace "acceptance-second"');sway('[app_id="cliprust-paste-receiver"] focus')
   summon();assert find('cliprust')['rect']['x']>=1280
+  assert [find('cliprust')['rect'][k] for k in ['width','height']]==[700,460]
   # Image and URI selection use the original supported clipboard MIME data.
   (root/'mode').write_text('image');search('image');key('-k','Return')
   wait(lambda:(root/'pixels.json').exists())
@@ -77,7 +115,7 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
   (root/'mode').write_text('files');summon();search('cliprust-acceptance');key('-k','Return')
   wait(lambda:(root/'files.txt').exists());assert b'file:///tmp/cliprust-acceptance.txt' in (root/'files.txt').read_bytes()
   print('Backend:',os.environ.get('CLIPRUST_SWAY_INPUT','native'),'(wtype uses an explicit GTK action mapping)')
-  print('PASS: GTK text/Arabic/Unicode, repeated keep-open, query preservation, Meta+V toggle, two workspaces/outputs, PNG and URI paste')
+  print('PASS: draggable header, flexible size, geometry preservation, GTK text/Arabic/Unicode, repeated keep-open, query preservation, Meta+V toggle, two workspaces/outputs, PNG and URI paste')
   # Real terminal receiver configured with Ctrl+V as required by this integration.
   (root/'foot.ini').write_text('[key-bindings]\nclipboard-paste=Control+v\n')
   (root/'capture.py').write_text('import os,tty,sys\ntty.setraw(0)\nf=open(sys.argv[1],"wb",buffering=0)\nwhile True:f.write(os.read(0,4096))\n')

@@ -8,7 +8,7 @@ Configure Sway:
 bindsym --no-repeat Mod4+v exec cliprust --toggle
 ```
 
-For an AppImage, replace `cliprust` with its absolute quoted path. Meta+V hides the focused launcher, otherwise summons the existing process on the invoking workspace/monitor and focuses search. Native Sway IPC handles floating placement. `--show` always summons it.
+For an AppImage, replace `cliprust` with its absolute quoted path. Meta+V hides the focused launcher, otherwise summons the existing process on the invoking workspace/monitor and focuses the history list. Native Sway IPC handles floating placement. `--show` always summons it.
 
 Enter restores the selected entry's original clipboard formats, verifies publication, restores the recorded application container's focus, and sends Ctrl+V through the native virtual keyboard. Ctrl+Enter does the same while keeping the window visible and returning focus to it; the query and destination survive repeated pastes. Existing customized keymaps are preserved. Applications must support Ctrl+V: terminals commonly use Ctrl+Shift+V, so configure their paste binding to Ctrl+V when using this integration.
 
@@ -25,3 +25,5 @@ Run `python3 scripts/sway-shortcut.py --executable /absolute/path/Cliprust.AppIm
 ## Editing shortcuts in Settings
 
 Open Settings, edit Open history (for example `Super+Shift+V`), then Save shortcuts. `Mod`, `Mod4`, `Meta` and `Win` are accepted as aliases for Super. Cliprust follows ordinary include patterns and variable/block bindings, refuses conflicts and ambiguous syntax, backs up the affected file, validates with Sway and reloads. An existing simple Cliprust launcher binding is replaced; if absent, a binding is added to the root config. Paste/Keep Open bindings apply immediately without restarting. Errors stay visible in Settings. Advanced keycode, continuation or ambiguous configurations require manual review rather than risking another binding. The equivalent CLI is `cliprust setup-shortcut Super+V`.
+
+The popup defaults to 780×540. Drag its header to move it and its bottom-right grip to resize it. Size and position are remembered across hide/reopen while Cliprust remains running; switching monitors clamps placement to the active output. Paste and Keep Open preserves geometry. Cliprust installs floating rules only for its own app ID in the current Sway session, without rewriting or reloading your configuration.

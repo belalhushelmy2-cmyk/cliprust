@@ -18,6 +18,101 @@ struct ContextState {
     pid: u64,
 }
 static STATE: Mutex<Option<ContextState>> = Mutex::new(None);
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Rect {
+    x: i64,
+    y: i64,
+    width: i64,
+    height: i64,
+}
+impl Rect {
+    fn from_json(value: &Value) -> Option<Self> {
+        Some(Self {
+            x: value["x"].as_i64()?,
+            y: value["y"].as_i64()?,
+            width: value["width"].as_i64()?,
+            height: value["height"].as_i64()?,
+        })
+    }
+}
+#[derive(Clone)]
+struct SavedWindow {
+    output: String,
+    rect: Rect,
+    bounds: Rect,
+}
+static GEOMETRY: Mutex<Option<SavedWindow>> = Mutex::new(None);
+fn placement(bounds: Rect, saved: Option<&SavedWindow>, output: &str) -> Rect {
+    // Leave a small margin around the popup and clamp remembered geometry to the live output.
+    let width = saved
+        .map_or(780, |s| s.rect.width)
+        .clamp(1, (bounds.width - 24).max(1));
+    let height = saved
+        .map_or(540, |s| s.rect.height)
+        .clamp(1, (bounds.height - 24).max(1));
+    let (x, y) = match saved.filter(|s| s.output == output) {
+        Some(s) => (
+            bounds.x + s.rect.x - s.bounds.x,
+            bounds.y + s.rect.y - s.bounds.y,
+        ),
+        None => (
+            bounds.x + (bounds.width - width) / 2,
+            bounds.y + (bounds.height - height) / 2,
+        ),
+    };
+    Rect {
+        x: x.clamp(bounds.x, bounds.x + bounds.width - width),
+        y: y.clamp(bounds.y, bounds.y + bounds.height - height),
+        width,
+        height,
+    }
+}
+fn window(tree: &Value) -> Result<&Value> {
+    visit(tree, &|n| {
+        n["pid"].as_u64() == Some(std::process::id().into())
+    })
+    .context("Cliprust surface is not mapped yet")
+}
+pub fn remember_geometry() -> Result<()> {
+    let tree = ipc(4, "")?;
+    let Some(node) = visit(&tree, &|n| {
+        n["pid"].as_u64() == Some(std::process::id().into())
+    }) else {
+        return Ok(());
+    };
+    let workspace = visit(&tree, &|n| {
+        n["type"] == "workspace" && visit(n, &|child| child["id"] == node["id"]).is_some()
+    })
+    .context("Cliprust workspace unavailable")?;
+    let workspaces = ipc(1, "")?;
+    let workspace = workspaces
+        .as_array()
+        .and_then(|all| all.iter().find(|w| w["name"] == workspace["name"]))
+        .context("Cliprust workspace was removed")?;
+    *GEOMETRY.lock().unwrap() = Some(SavedWindow {
+        output: workspace["output"]
+            .as_str()
+            .context("Output name missing")?
+            .into(),
+        rect: Rect::from_json(&node["rect"]).context("Window geometry missing")?,
+        bounds: Rect::from_json(&workspace["rect"]).context("Workspace geometry missing")?,
+    });
+    Ok(())
+}
+/// Restore keyboard focus after Keep Open without resizing, moving or recentering the popup.
+pub fn refocus() -> Result<()> {
+    let tree = ipc(4, "")?;
+    let id = window(&tree)?["id"]
+        .as_u64()
+        .context("Cliprust container ID missing")?;
+    command(&format!("[con_id={id}] focus"))
+}
+/// Float only Cliprust at map time, before Sway can retile the destination app.
+/// This is a session rule; it does not edit or reload the user's configuration.
+pub fn configure_popup() -> Result<()> {
+    command(r#"for_window [app_id="^(org[.]cliprust[.]Cliprust|cliprust)$"] floating enable"#)?;
+    command(r#"for_window [app_id="^(org[.]cliprust[.]Cliprust|cliprust)$"] border pixel 1"#)
+}
 pub fn available() -> bool {
     super::is_wayland() && std::env::var_os("SWAYSOCK").is_some()
 }
@@ -157,15 +252,20 @@ pub fn show() -> Result<()> {
         command(&format!("focus output {output}"))?;
         command(&format!("workspace {ws}"))?;
     }
-    for action in [
-        "floating enable".to_string(),
-        format!("move container to workspace {ws}"),
-        "resize set width 860 px height 580 px".into(),
-        "move position center".into(),
-        "focus".into(),
-    ] {
-        command(&format!("[con_id={id}] {action}"))?;
-    }
+    let workspaces = ipc(1, "")?;
+    let workspace = workspaces
+        .as_array()
+        .and_then(|all| all.iter().find(|w| w["name"] == state.workspace))
+        .context("Invoking workspace was removed")?;
+    let bounds = Rect::from_json(&workspace["rect"]).context("Workspace geometry missing")?;
+    let geometry = placement(bounds, GEOMETRY.lock().unwrap().as_ref(), &state.output);
+    // Commit the tiled-to-floating transition before sizing: Sway/SwayFX can otherwise
+    // apply a stale tiled configure after the resize in the same batch.
+    command(&format!("[con_id={id}] floating enable"))?;
+    command(&format!(
+        "[con_id={id}] move container to workspace {ws}, resize set width {} px height {} px, move absolute position {} px {} px, focus",
+        geometry.width, geometry.height, geometry.x, geometry.y
+    ))?;
     let tree = ipc(4, "")?;
     if !visit(&tree, &|n| n["id"].as_u64() == Some(id)).is_some_and(|n| n["focused"] == true) {
         bail!("Sway did not focus Cliprust");
@@ -266,6 +366,62 @@ pub fn paste(target: Target) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn popup_geometry_preserves_size_and_position_and_fits_changed_outputs() {
+        let bounds = Rect {
+            x: 1280,
+            y: 30,
+            width: 1280,
+            height: 770,
+        };
+        assert_eq!(
+            placement(bounds, None, "DP-1"),
+            Rect {
+                x: 1530,
+                y: 145,
+                width: 780,
+                height: 540
+            }
+        );
+        let saved = SavedWindow {
+            output: "DP-1".into(),
+            rect: Rect {
+                x: 1500,
+                y: 200,
+                width: 720,
+                height: 460,
+            },
+            bounds,
+        };
+        assert_eq!(placement(bounds, Some(&saved), "DP-1"), saved.rect);
+        let smaller = Rect {
+            x: -800,
+            y: 20,
+            width: 800,
+            height: 600,
+        };
+        assert_eq!(
+            placement(smaller, Some(&saved), "HDMI-1"),
+            Rect {
+                x: -760,
+                y: 90,
+                width: 720,
+                height: 460
+            }
+        );
+        let clipped = placement(
+            Rect {
+                width: 680,
+                height: 480,
+                ..bounds
+            },
+            Some(&saved),
+            "DP-1",
+        );
+        assert_eq!((clipped.width, clipped.height), (656, 456));
+        assert!(clipped.x + clipped.width <= bounds.x + 680);
+        assert!(clipped.y + clipped.height <= bounds.y + 480);
+    }
     #[test]
     fn tree_search_includes_floating_xwayland_windows() {
         let tree = serde_json::json!({"nodes":[],"floating_nodes":[{"id":7,"pid":123,"window":22,"focused":true}]});

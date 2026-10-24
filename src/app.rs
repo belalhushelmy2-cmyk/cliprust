@@ -63,34 +63,85 @@ fn prepare_desktop_target(fallback: Target) -> Target {
     }
     fallback
 }
+static DESKTOP_PLACEMENT_GENERATION: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn remember_desktop_geometry() {
+    #[cfg(target_os = "linux")]
+    if platform::sway::available()
+        && let Err(error) = platform::sway::remember_geometry()
+    {
+        eprintln!("Cliprust geometry: {error:#}");
+    }
+}
+fn hide_desktop_window(ui: &AppWindow) {
+    DESKTOP_PLACEMENT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    remember_desktop_geometry();
+    let _ = ui.hide();
+}
 fn finish_desktop_show(ui: &AppWindow) {
+    finish_desktop_placement(ui, true);
+}
+fn finish_desktop_placement(ui: &AppWindow, reposition: bool) {
+    if !ui.window().is_visible() {
+        return;
+    }
     #[cfg(target_os = "linux")]
     if platform::sway::available() || platform::kde::is_kde() {
         let weak = ui.as_weak();
+        let generation =
+            DESKTOP_PLACEMENT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
         std::thread::spawn(move || {
-            // A newly mapped Wayland surface may not reach KWin until the next UI flush.
+            // Cancel deferred work on hide/new summon so stale requests cannot steal focus.
             let mut result = Ok(Target(0));
-            for _ in 0..5 {
-                std::thread::sleep(std::time::Duration::from_millis(40));
+            for _ in 0..25 {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                if DESKTOP_PLACEMENT_GENERATION.load(std::sync::atomic::Ordering::SeqCst)
+                    != generation
+                {
+                    return;
+                }
                 result = if platform::sway::available() {
-                    platform::sway::show().map(|()| Target(0))
+                    (if reposition {
+                        platform::sway::show()
+                    } else {
+                        platform::sway::refocus()
+                    })
+                    .map(|()| Target(0))
                 } else {
                     platform::kde::request("show", Target(0))
                 };
                 if result.is_ok() {
                     return;
                 }
+                if !result
+                    .as_ref()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("surface is not mapped yet")
+                {
+                    break;
+                }
+            }
+            if DESKTOP_PLACEMENT_GENERATION.load(std::sync::atomic::Ordering::SeqCst) != generation
+            {
+                return;
             }
             if let Err(error) = result {
                 eprintln!("Cliprust desktop placement: {error:#}");
                 let _ = weak.upgrade_in_event_loop(move |ui| {
-                    ui.set_status(format!("Desktop placement: {error:#}").into())
+                    if ui.window().is_visible()
+                        && DESKTOP_PLACEMENT_GENERATION.load(std::sync::atomic::Ordering::SeqCst)
+                            == generation
+                    {
+                        ui.set_status(format!("Desktop placement: {error:#}").into());
+                    }
                 });
             }
         });
     }
     #[cfg(not(target_os = "linux"))]
-    let _ = ui;
+    let _ = (ui, reposition);
 }
 
 fn set_ui_theme(ui: &AppWindow, mode: i32, system_light: bool) {
@@ -293,11 +344,10 @@ impl Worker {
             .source
             .clone()
             .unwrap_or_else(|| "All applications".into());
-        let recent_searches: Vec<slint::SharedString> =
-            std::iter::once("Recent searches".to_owned())
-                .chain(self.store.recent_searches())
-                .map(Into::into)
-                .collect();
+        let recent_searches: Vec<slint::SharedString> = std::iter::once("Recent".to_owned())
+            .chain(self.store.recent_searches())
+            .map(Into::into)
+            .collect();
         self.send(move |ui| {
             ui.set_recent_searches(ModelRc::from(Rc::new(VecModel::from(recent_searches))));
             ui.set_grouping(grouping.into());
@@ -576,6 +626,9 @@ impl Worker {
                 let _ = &token;
                 self.target = prepare_desktop_target(self.target);
                 self.send(move |ui| {
+                    if ui.window().is_visible() {
+                        remember_desktop_geometry();
+                    }
                     if let Err(error) = ui.show() {
                         ui.set_status(format!("Show window: {error}").into());
                         return;
@@ -600,7 +653,7 @@ impl Worker {
                         .with_winit_window(|w| w.has_focus())
                         .unwrap_or(false);
                     if ui.window().is_visible() && focused {
-                        let _ = ui.hide();
+                        hide_desktop_window(&ui);
                         let _ = requests.send(Request::Hidden);
                     } else {
                         let _ = requests.try_send(Request::Show(target));
@@ -613,6 +666,9 @@ impl Worker {
                     self.target = target;
                 }
                 self.send(|ui| {
+                    if ui.window().is_visible() {
+                        remember_desktop_geometry();
+                    }
                     if let Err(error) = ui.show() {
                         ui.set_status(format!("Show window: {error}").into());
                         return;
@@ -621,7 +677,9 @@ impl Worker {
                     finish_desktop_show(&ui);
                     ui.window().with_winit_window(|w| {
                         w.set_minimized(false);
-                        w.focus_window();
+                        if !platform::is_wayland() {
+                            w.focus_window();
+                        }
                     });
                 });
             }
@@ -946,12 +1004,12 @@ impl Worker {
                     if !keep_open {
                         self.visible = false;
                         self.send(|ui| {
-                            let _ = ui.hide();
+                            hide_desktop_window(&ui);
                         });
                     } else {
                         std::thread::sleep(std::time::Duration::from_millis(80));
                         self.send(|ui| {
-                            finish_desktop_show(&ui);
+                            finish_desktop_placement(&ui, false);
                             if !platform::is_wayland() {
                                 ui.window().with_winit_window(|w| w.focus_window());
                             }
@@ -1108,8 +1166,6 @@ pub fn run(
                     attributes.with_activation_token(slint::winit_030::winit::window::ActivationToken::from_raw(token.clone()))
                 } else { attributes }
             };
-            let attributes = attributes
-                .with_window_level(slint::winit_030::winit::window::WindowLevel::AlwaysOnTop);
             #[cfg(target_os = "linux")]
             let attributes = {
                 use slint::winit_030::winit::platform::{
@@ -1129,8 +1185,39 @@ pub fn run(
     if let Err(error) = platform::kde::start() {
         eprintln!("Cliprust: {error:#}");
     }
+    #[cfg(target_os = "linux")]
+    if platform::sway::available()
+        && let Err(error) = platform::sway::configure_popup()
+    {
+        eprintln!("Cliprust popup rule: {error:#}");
+    }
     let initial_target = prepare_desktop_target(initial_target);
+    #[cfg(target_os = "linux")]
+    slint::set_xdg_app_id("org.cliprust.Cliprust")?;
     let ui = AppWindow::new()?;
+    #[cfg(windows)]
+    ui.set_interface_font("Segoe UI".into());
+    {
+        let weak = ui.as_weak();
+        ui.on_resize_window(move || {
+            let weak = weak.clone();
+            // The compositor consumes the release while resizing. Cancel Slint's pointer
+            // grab after the current event before handing the held button to the backend.
+            slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+                if let Some(ui) = weak.upgrade() {
+                    ui.window()
+                        .dispatch_event(slint::platform::WindowEvent::PointerExited);
+                    ui.window().with_winit_window(|window| {
+                        if let Err(error) = window.drag_resize_window(
+                            slint::winit_030::winit::window::ResizeDirection::SouthEast,
+                        ) {
+                            ui.set_status(format!("Resize window: {error}").into());
+                        }
+                    });
+                }
+            });
+        });
+    }
     let weak = ui.as_weak();
     let (capture_tx, capture_rx) = bounded::<Event>(16);
     {
@@ -1211,7 +1298,7 @@ pub fn run(
         ui.on_dismiss(move || {
             let _ = tx.try_send(Request::Hidden);
             if let Some(ui) = weak.upgrade() {
-                let _ = ui.hide();
+                hide_desktop_window(&ui);
             }
         });
     }
@@ -1221,7 +1308,7 @@ pub fn run(
         move || {
             let _ = tx.try_send(Request::Hidden);
             if let Some(ui) = weak.upgrade() {
-                let _ = ui.hide();
+                hide_desktop_window(&ui);
             }
             slint::CloseRequestResponse::KeepWindowShown
         }

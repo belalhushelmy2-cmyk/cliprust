@@ -57,8 +57,9 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
   app=subprocess.Popen([str(binary),'--database',db],env=env,stdout=log,stderr=log);processes.append(app)
   wait(lambda:focused('cliprust'));time.sleep(.5)
   sway(f'bindsym Mod4+v exec "{binary}" --database "{db}" --toggle')
+  expected_size=[780,540]
   def summon():
-   key('-M','logo','v','-m','logo');wait(lambda:focused('cliprust'));wait(lambda:find('cliprust')['rect']['width']==860);time.sleep(.3)
+   key('-M','logo','v','-m','logo');wait(lambda:focused('cliprust'));wait(lambda:[find('cliprust')['rect'][k] for k in ['width','height']]==expected_size);time.sleep(.3)
   def hide():
    key('-M','logo','v','-m','logo');wait(lambda:find('cliprust') is None)
   def publish(value):
@@ -71,7 +72,7 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
    path=root/'screen.png';subprocess.run(['grim','-o','HEADLESS-1',str(path)],env=env,check=True)
    x,y,w,h=[rectangle[k] for k in ['x','y','width','height']]
    # The list viewport only, excluding the status line, search caret, and target editor.
-   cropped=Image.open(path).convert('RGB').crop((x+25,y+245,x+w//2,y+h-65))
+   cropped=Image.open(path).convert('RGB').crop((x+24,y+191,x+w//2,y+h-55))
    return cropped.tobytes()
   def assert_selection_visible():
    list_pixels() # Refresh the screenshot after layout/rendering.
@@ -80,24 +81,34 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
    x,y=rectangle['x'],rectangle['y']
    # The selected row's vertical border must be fully inside the viewport.
    border=(112,97,143)
-   ys=[dy for dy in range(245,rectangle['height']-65)
-       if image.getpixel((x+24,y+dy))==border]
+   ys=[dy for dy in range(170,rectangle['height']-52)
+       if any(image.getpixel((x+dx,y+dy))==border for dx in range(22,25))]
    assert ys and max(ys)-min(ys)>=48, 'Keyboard selection is clipped or outside the viewport'
   hide()
   for value in ['First copy','Second copy','Newest مرحبا']:
    publish(value);time.sleep(1.05)
   sway('[app_id="cliprust-paste-receiver"] focus');summon()
   assert_selection_visible()
+  shutil.copy2(root/'screen.png','/tmp/cliprust-slick-ui.png')
   for direction in ['Up']*12+['Down']*14+['Up']*2:
    key('-k',direction)
    assert_selection_visible()
   key('-k','Return');wait(lambda:text()=='Newest مرحبا');wait(lambda:find('cliprust') is None)
   assert copies('Newest مرحبا')==1 # Only the genuine copy, no self capture.
-  summon();key('-k','Down');key('-k','Up');key('-k','Down');before=list_pixels();key('-M','ctrl','-k','Return','-m','ctrl')
+  summon();key('-k','Down');key('-k','Up');key('-k','Down')
+  sway(f'[con_id={find("cliprust")["id"]}] resize set width 740 px height 500 px, move absolute position 100 px 140 px')
+  expected_size=[740,500];time.sleep(.4)
+  pinned_geometry=find('cliprust')['rect'].copy()
+  before=list_pixels();key('-M','ctrl','-k','Return','-m','ctrl')
   wait(lambda:text()=='Newest مرحباSecond copy');wait(lambda:focused('cliprust'))
   assert before==list_pixels(),'Paste changed row order, selection, or scrolled viewport'
+  assert find('cliprust')['rect']==pinned_geometry, 'Keep Open reset window geometry'
   key('-M','ctrl','-k','Return','-m','ctrl');wait(lambda:text()=='Newest مرحباSecond copySecond copy');wait(lambda:focused('cliprust'))
   assert before==list_pixels(),'Repeated keep-open changed list viewport'
+  assert find('cliprust')['rect']==pinned_geometry
+  sway('[app_id="cliprust-paste-receiver"] focus');time.sleep(.5)
+  assert focused('cliprust-paste-receiver'), 'Cliprust stole focus back after external activation'
+  summon();assert find('cliprust')['rect']==pinned_geometry
   assert copies('Second copy')==1
   # Genuine external offers, even with the same payload, must still be recorded.
   old_count=copies('Second copy');publish('Second copy');wait(lambda:copies('Second copy')==old_count+1)
@@ -112,7 +123,8 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
   assert search_view==list_pixels()
   key('-k','Escape');time.sleep(.2);assert focused('cliprust') # Clears query first.
   key('-k','Escape');wait(lambda:find('cliprust') is None)
-  summon();key('-k','Return');wait(lambda:text().endswith('External newest'));wait(lambda:find('cliprust') is None)
+  summon();assert find('cliprust')['rect']==pinned_geometry, 'Reopening forgot custom geometry'
+  key('-k','Return');wait(lambda:text().endswith('External newest'));wait(lambda:find('cliprust') is None)
   summon();key('SnippetAcceptance');time.sleep(.3);snippet_view=list_pixels()
   key('-M','ctrl','-k','Return','-m','ctrl');wait(lambda:text().endswith('expanded snippet مرحبا'));wait(lambda:focused('cliprust'))
   assert snippet_view==list_pixels()
@@ -121,7 +133,7 @@ with tempfile.TemporaryDirectory(prefix='cliprust-sway-paste-') as directory:
   if binary.suffix=='.AppImage':
    assert 'Fontconfig error:' not in (root/'log').read_text()
    assert 'xkbcommon: ERROR:' not in (root/'log').read_text()
-  print('PASS: newest external copy selected beneath pins; Enter without click; full Up/Down traversal keeps selection visible; typing-to-search; Escape clear/close; repeated Ctrl+Enter preserves exact list pixels/selection/scroll; self writes suppressed; identical/new external copies recorded without visible changes; reopen refreshes and selects latest')
+  print('PASS: smaller default popup; custom geometry survives Keep Open and reopen; external focus respected; newest external copy selected beneath pins; Enter without click; full Up/Down traversal keeps selection visible; typing-to-search; Escape clear/close; repeated Ctrl+Enter preserves exact list pixels/selection/scroll; self writes suppressed; identical/new external copies recorded without visible changes; reopen refreshes and selects latest')
  except Exception:
   subprocess.run(['grim','/tmp/cliprust-sway-failure.png'],env=env)
   print('CLIPRUST:',find('cliprust'))
